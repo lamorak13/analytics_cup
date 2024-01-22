@@ -60,7 +60,7 @@ print(requests_df.describe())
 
 print("________________________________________________________________________________")
 
-# Merge datasets
+
 # Merging reviews with diet on AuthorId
 merged_df = pd.merge(reviews_df, diet_df, on='AuthorId', how='left')
 
@@ -80,13 +80,39 @@ print("______________________________")
 print(merged_df.describe())
 
 # Handling missing values
-merged_df.fillna(merged_df.mean(), inplace=True)  # Numerical columns
-merged_df.fillna('Unknown', inplace=True)  # Categorical columns
+#merged_df.fillna(merged_df.mean(), inplace=True)  # Numerical columns
+#merged_df.fillna('Unknown', inplace=True)  # Categorical columns
 
 # Convert categorical variables to numeric
-merged_df = pd.get_dummies(merged_df, columns=['Diet', 'RecipeCategory'])
+#merged_df = pd.get_dummies(merged_df, columns=['Diet', 'RecipeCategory'])
 
-print("______________________________")
+print("________________________________________________________________________________")
+
+
+
+# Feature Engineering
+# 1. Total Time = CookTime + PrepTime
+merged_df['TotalTime'] = merged_df['CookTime'] + merged_df['PrepTime']
+
+# 2. Number of Ingredients (example, adjust based on actual data structure)
+merged_df['NumIngredients'] = merged_df['RecipeIngredientParts'].apply(lambda x: len(str(x).split(',')))
+
+# 3. Categorizing Nutritional Content
+# Example: High Calorie if calories > 500
+merged_df['HighCalorie'] = merged_df['Calories'].apply(lambda x: 1 if x > 500 else 0)
+
+# 4. Creating Age Groups
+bins = [0, 18, 25, 35, 45, 55, 65, 100]
+labels = ['0-18', '18-25', '25-35', '35-45', '45-55', '55-65', '65+']
+merged_df['AgeGroup'] = pd.cut(merged_df['Age'], bins=bins, labels=labels)
+
+# 5. Interaction Feature (Example)
+merged_df['Diet_RecipeCategory'] = merged_df['Diet'] + "_" + merged_df['RecipeCategory']
+
+# merged_df.drop(['CookTime', 'PrepTime', 'RecipeIngredientParts', 'Age'], axis=1, inplace=True)
+
+print("\nMerged and engineered DataFrame:")
+print("")
 print(merged_df.describe())
 
 
