@@ -157,12 +157,12 @@ cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5)
 print("Mean CV Score: ", cv_scores.mean())
 
 # Creating a DataFrame with id and prediction columns
-ids = np.arange(1, 33803)
+ids = np.arange(1, 42815)
 predictions = np.full_like(ids, np.nan)
 df_predictions = pd.DataFrame({'id': ids, 'prediction': predictions})
 
 # Assuming y_pred contains your model's predictions
-df_predictions['prediction'] = y_pred
+''' df_predictions['prediction'] = y_pred '''
 
 print(len(y_pred))
 
