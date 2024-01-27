@@ -305,6 +305,7 @@ print("Mean CV Score:", cv_scores.mean())
 
 # Filter the rows where 'Like' is NA
 predict_df = reviews_df[reviews_df['Like'].isna()]
+predict_df['TestSetId'] = predict_df['TestSetId'].astype(int)
 
 # Select the same feature columns used in the model
 X_predict = merged_df.loc[predict_df.index, feature_columns]
