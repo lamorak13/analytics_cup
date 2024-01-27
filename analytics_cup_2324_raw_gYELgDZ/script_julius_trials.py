@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_squared_error, accuracy_score, classification_report, confusion_matrix, \
@@ -45,7 +46,6 @@ recipes_df = recipes_df.join(recipes_encoded)
 dropColumn(recipes_df, 'RecipeCategory')
 
 dropColumn(recipes_df, 'RecipeIngredientQuantities')  # TODO Drop for now, more intensive processing needed.
-dropColumn(recipes_df, 'RecipeIngredientParts')  # TODO Drop for now, more intensive processing needed.
 
 dropColumn(recipes_df, 'RecipeServings')  # TODO Drop for now, more intensive processing needed.
 dropColumn(recipes_df, 'RecipeYield')
@@ -86,7 +86,8 @@ print("")
 recipes_df['FatCalorieProduct'] = recipes_df['FatContent'] * recipes_df['Calories']
 
 # Standardize Content Values
-columns_to_standardize = ['Calories', 'FatContent', 'SaturatedFatContent', 'CholesterolContent', 'SodiumContent', 'CarbohydrateContent', 'FiberContent', 'SugarContent', 'ProteinContent']
+columns_to_standardize = ['Calories', 'FatContent', 'SaturatedFatContent', 'CholesterolContent', 'SodiumContent',
+                          'CarbohydrateContent', 'FiberContent', 'SugarContent', 'ProteinContent']
 scaler = StandardScaler()
 standardized_data = scaler.fit_transform(recipes_df[columns_to_standardize])
 standardized_columns = [f'{col}_Standardized' for col in columns_to_standardize]
@@ -102,10 +103,152 @@ dropColumn(recipes_df, 'FiberContent')
 dropColumn(recipes_df, 'SugarContent')
 dropColumn(recipes_df, 'ProteinContent')
 
+# Categorize RecipeIngredientParts
+omnivore_keywords = [
+    "Beef", "Chicken", "Pork", "Lamb", "Turkey", "Veal", "Bacon", "Sausage", "Steak", "Ground beef",
+    "Ham", "Ribs", "Venison", "Duck", "Quail", "Bison", "Meatballs", "Goat", "Rabbit", "Goose",
+    "Seafood", "Shrimp", "Salmon", "Tuna", "Cod", "Lobster", "Crab", "Clams", "Oysters", "Mussels",
+    "Scallops", "Tilapia", "Catfish", "Swordfish", "Haddock", "Halibut", "Mahi-mahi", "Octopus", "Squid", "Eel",
+    "Anchovies", "Mackerel", "Herring", "Trout", "Snapper", "Grouper", "Flounder", "Perch", "Sole", "Caviar",
+    "Prosciutto", "Parma ham", "Chorizo", "Bratwurst", "Corned beef", "Pastrami", "Pate", "Salami", "Pepperoni",
+    "Kielbasa", "Liver", "Kidneys", "Heart", "Tongue", "Tripe", "Haggis", "Blood sausage", "Chitterlings",
+    "Crayfish", "Prawn", "Monkfish", "Sea bass", "Sardines", "Pike", "Carp", "Arctic char", "King crab", "Snow crab",
+    "Conch", "Sea urchin", "Abalone", "Lumpfish", "Pufferfish", "Swordfish", "Bluefish", "Pompano", "Redfish",
+    "Scrod", "Shark", "Sturgeon", "Tilefish", "Wahoo", "Yellowtail", "Frog legs", "Snails", "Alligator", "Kangaroo",
+    "Wild boar", "Ostrich", "Guinea fowl", "Pheasant", "Partridge", "Emu", "Camel", "Elk", "Moose", "Reindeer",
+    "Bear", "Buffalo", "Crocodile", "Rattlesnake", "Turtle", "Pigeon", "Dove", "Squirrel", "Porcupine", "Raccoon"
+]
+
+vegetarian_keywords = [
+    "Cheese - Cheddar", "Cheese - Mozzarella", "Cheese - Parmesan",
+    "Eggs - Chicken", "Eggs - Duck", "Eggs - Quail",
+    "Butter",
+    "Milk - Cow", "Milk - Goat", "Milk - Buffalo",
+    "Yogurt", "Greek Yogurt",
+    "Cream - Heavy", "Cream - Light", "Sour Cream",
+    "Paneer",
+    "Ghee",
+    "Honey",
+    "Gelatin (non-vegetarian but used in some vegetarian cuisines)",
+    "Casein",
+    "Whey Protein",
+    "Custard (made with eggs)",
+    "Mayonnaise (traditional recipes contain egg)",
+    "Quiche",
+    "Frittata",
+    "Ricotta Cheese",
+    "Brie Cheese",
+    "Camembert Cheese",
+    "Feta Cheese",
+    "Halloumi Cheese",
+    "Mascarpone",
+    "Tzatziki (made with yogurt)",
+    "Lassi (yogurt-based drink)",
+    "Ice Cream",
+    "Cottage Cheese",
+    "Cream Cheese",
+    "Sour Cream",
+    "Egg Noodles",
+    "Meringue (made with egg whites)",
+    "Creme Brulee (contains cream and eggs)",
+    "Pavlova (meringue-based dessert)",
+    "Eggnog (made with milk and eggs)",
+    "Caramel (dairy-based)",
+    "Panna Cotta (contains gelatin and cream)",
+    "Flan (contains eggs and milk)",
+    "Tiramisu (contains mascarpone cheese, cream, and sometimes egg)",
+    "Chocolate (milk chocolate)",
+    "Buttermilk",
+    "Condensed Milk",
+    "Evaporated Milk",
+    "Alfredo Sauce (contains cream and cheese)",
+    "Cheese - Gouda", "Cheese - Swiss", "Cheese - Blue Cheese",
+    "Cheese - Roquefort", "Cheese - Colby", "Cheese - Monterey Jack",
+    "Cheese - Havarti", "Cheese - Provolone", "Cheese - Edam",
+    "Cheese - Emmental", "Cheese - Gorgonzola", "Cheese - Stilton",
+    "Cheese Spread", "Cheese Fondue",
+    "Egg Salad", "Eggplant Parmesan",
+    "Omelette",
+    "Dairy-Based Salad Dressing",
+    "Milkshake",
+    "Vegetarian Pudding",
+    "Cheese Pizza", "Vegetarian Lasagna",
+    "Vegetarian Sausage (contains eggs and/or dairy)",
+    "Egg Custard",
+    "French Toast (made with eggs and milk)",
+    "Grilled Cheese Sandwich",
+    "Macaroni and Cheese",
+    "Vegetarian Quorn products (some contain egg and/or dairy)",
+    "Scrambled Eggs",
+    "Souffle (contains eggs and/or cheese)",
+    "Veggie Omelet",
+    "Yogurt Parfait",
+    "Custard Tart (contains eggs and milk)",
+    "Dulce de Leche (milk-based)",
+    "Vegetarian Gelato",
+    "Milk-based Indian Sweets (like Rasgulla, Rasmalai)",
+    "Protein Bars (some contain dairy or eggs)",
+    "Whey-based Protein Shakes",
+    "Egg-based Pasta",
+    "Cheese Croissant",
+    "Cheese Strudel",
+    "Egg-based Breakfast Burrito",
+    "Milk-based Soups and Sauces",
+    "Cheese Blintz",
+    "Yogurt Dressing",
+    "Butter Toffee",
+    "Cheese Souffle",
+    "Egg Drop Soup",
+    "Egg Fried Rice",
+    "Greek Salad with Feta",
+    "Mozzarella Sticks",
+    "Paneer Tikka",
+    "Ricotta Pancakes",
+    "Spinach and Cheese Ravioli",
+    "Vegetarian Caesar Salad (traditional recipe contains anchovies)",
+    "Cheese and Spinach Pie",
+    "Egg Bhurji (Indian scrambled eggs)",
+    "Yogurt Smoothie",
+    "Vegetarian Cheeseburger (with cheese and vegetarian patty)",
+    "Cream-based Pastas",
+    "Quark (fresh dairy product)",
+    "Labneh (strained yogurt)",
+    "Kefir (fermented milk drink)",
+    "Vegetarian Pate (made with cheese or eggs)",
+    "Deviled Eggs",
+    "Egg Salad Sandwich",
+    "Egg-based Breads and Pastries",
+    "Milk Tea",
+    "Vegetarian Egg Rolls (with dairy or egg-based fillings)",
+    "Cheese Omelet",
+    "Cottage Cheese and Fruit",
+    "Dairy-Based Smoothies",
+    "Milk-Based Protein Powder",
+    "Vegetarian Shepherd's Pie (with dairy and/or egg ingredients)"
+]
+
+
+def classify_ingredient(ingredient):
+    ingredient_lower = ingredient.lower().strip()  # Convert to lowercase and remove leading/trailing spaces
+    if any(keyword.lower() in ingredient_lower for keyword in omnivore_keywords):
+        return 'omnivore'
+    elif any(keyword.lower() in ingredient_lower for keyword in vegetarian_keywords):
+        return 'vegetarian'
+    else:
+        return 'vegan'
+
+
+# Apply classification function to the 'RecipeIngredientParts' column
+recipes_df['RecipeIngredientPartsClassification'] = recipes_df['RecipeIngredientParts'].apply(classify_ingredient)
+dropColumn(recipes_df, 'RecipeIngredientParts')
+
+recipes_encoded = pd.get_dummies(recipes_df['RecipeIngredientPartsClassification'], prefix='RecipeIngredientPartsClassification', dtype=int)
+recipes_df = recipes_df.join(recipes_encoded)
+dropColumn(recipes_df, 'RecipeIngredientPartsClassification')
 
 '''##### MERGE DATAFRAMES ######'''
 merged_df = pd.merge(recipes_df, requests_df, on='RecipeId', how='inner')
-merged_df = pd.merge(merged_df, diet_df, on='AuthorId', how='inner')
+merged_df = pd.merge(merged_df, diet_df, on='AuthorId', how='inner') #TODO merge broken, recipeId the same for all !!!
 
 # reviews_df = reviews_df.dropna(subset=['Like'])
 
@@ -154,3 +297,26 @@ print(classification_report(y_test, y_pred))
 # Perform cross-validation
 cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5)
 print("Mean CV Score:", cv_scores.mean())
+
+
+# Filter the rows where 'Like' is NA
+predict_df = reviews_df[reviews_df['Like'].isna()]
+
+# Select the same feature columns used in the model
+X_predict = merged_df.loc[predict_df.index, feature_columns]
+
+# Predict Using the Model
+X_predict_scaled = scaler.transform(X_predict)
+
+# Make predictions
+predictions = model.predict(X_predict_scaled)
+
+# Create a New DataFrame for Predictions
+predictions_df = pd.DataFrame({
+    'id': predict_df['TestSetId'],
+    'prediction': predictions
+})
+
+# Write to CSV
+predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
+print("Written to CSV.")
