@@ -5,8 +5,6 @@ from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_squared_error, accuracy_score, classification_report, confusion_matrix, \
     precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
-from imblearn.over_sampling import SMOTE
-import numpy as np
 
 diet_df = pd.read_csv('diet.csv')
 recipes_df = pd.read_csv('recipes.csv')
@@ -275,14 +273,8 @@ y = reviews_df['Like'][mask].astype(int)
 print(y.value_counts()[1], "1s")
 print(y.value_counts()[0], "0s")
 
-smote = SMOTE()
-X_resampled, y_resampled = smote.fit_resample(X, y)
-
-print(y_resampled.value_counts()[1], "1s")
-print(y_resampled.value_counts()[0], "0s")
-
 # Splitting the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.3, random_state=2024)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=2024)
 
 # Feature Scaling
 scaler = StandardScaler()
@@ -290,7 +282,7 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 # Creating and fitting the logistic regression model
-model = LogisticRegression()
+model = LogisticRegression(class_weight='balanced')
 model.fit(X_train_scaled, y_train)
 
 # Predicting and evaluating the model
@@ -305,10 +297,9 @@ print("Mean CV Score:", cv_scores.mean())
 
 # Filter the rows where 'Like' is NA
 predict_df = reviews_df[reviews_df['Like'].isna()]
-predict_df.loc[:, 'TestSetId'] = predict_df['TestSetId'].astype(int)
 
 # Select the same feature columns used in the model
-X_predict = merged_df.loc[predict_df.index, feature_columns]
+X_predict = merged_df.loc[predict_df.TestSetId, feature_columns]
 
 # Predict Using the Model
 X_predict_scaled = scaler.transform(X_predict)
@@ -322,10 +313,9 @@ predictions_df = pd.DataFrame({
     'prediction': predictions
 })
 
-# Write to CSV
 if predictions_df['id'].dtype == 'float':
     predictions_df['id'] = predictions_df['id'].astype(int)
 
+# Write to CSV
 predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
-
 print("Written to CSV.")
