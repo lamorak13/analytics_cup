@@ -275,7 +275,7 @@ print(y.value_counts()[1], "1s")
 print(y.value_counts()[0], "0s")
 
 # Splitting the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=2024)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=2024)
 
 # Feature Scaling
 scaler = StandardScaler()
@@ -283,7 +283,7 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 # Creating and fitting the logistic regression model
-model = LogisticRegression(class_weight='balanced')
+model = LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced')
 model.fit(X_train_scaled, y_train)
 
 # Predicting and evaluating the model
