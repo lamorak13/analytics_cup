@@ -305,7 +305,7 @@ print("Mean CV Score:", cv_scores.mean())
 
 # Filter the rows where 'Like' is NA
 predict_df = reviews_df[reviews_df['Like'].isna()]
-predict_df['TestSetId'] = predict_df['TestSetId'].astype(int)
+predict_df.loc[:, 'TestSetId'] = predict_df['TestSetId'].astype(int)
 
 # Select the same feature columns used in the model
 X_predict = merged_df.loc[predict_df.index, feature_columns]
@@ -317,9 +317,10 @@ X_predict_scaled = scaler.transform(X_predict)
 predictions = model.predict(X_predict_scaled)
 
 # Create a New DataFrame for Predictions
-ids = np.arange(1, 42815)
-predictions_nan = np.full_like(ids, np.nan)
-predictions_df = pd.DataFrame({'id': ids, 'prediction': predictions})
+predictions_df = pd.DataFrame({
+    'id': predict_df['TestSetId'],
+    'prediction': predictions
+})
 
 # Write to CSV
 predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
