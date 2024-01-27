@@ -6,6 +6,7 @@ from sklearn.metrics import mean_squared_error, accuracy_score, classification_r
     precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
 from imblearn.over_sampling import SMOTE
+import numpy as np
 
 diet_df = pd.read_csv('diet.csv')
 recipes_df = pd.read_csv('recipes.csv')
@@ -315,10 +316,9 @@ X_predict_scaled = scaler.transform(X_predict)
 predictions = model.predict(X_predict_scaled)
 
 # Create a New DataFrame for Predictions
-predictions_df = pd.DataFrame({
-    'id': predict_df['TestSetId'],
-    'prediction': predictions
-})
+ids = np.arange(1, 42815)
+predictions_nan = np.full_like(ids, np.nan)
+predictions_df = pd.DataFrame({'id': ids, 'prediction': predictions})
 
 # Write to CSV
 predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
