@@ -83,6 +83,8 @@ print("")
 
 '''##### FEATURE ENGINEERING #####'''
 recipes_df['FatCalorieProduct'] = recipes_df['FatContent'] * recipes_df['Calories']
+recipes_df['ProteinFiberProduct'] = recipes_df['ProteinContent'] * recipes_df['FiberContent']
+recipes_df['TotalTime^2'] = recipes_df['TotalTime'] * recipes_df['TotalTime']
 
 # Standardize Content Values
 columns_to_standardize = ['Calories', 'FatContent', 'SaturatedFatContent', 'CholesterolContent', 'SodiumContent',
@@ -245,7 +247,6 @@ recipes_encoded = pd.get_dummies(recipes_df['RecipeIngredientPartsClassification
 recipes_df = recipes_df.join(recipes_encoded)
 dropColumn(recipes_df, 'RecipeIngredientPartsClassification')
 
-print(requests_df.duplicated(subset='RecipeId').any())
 
 '''##### MERGE DATAFRAMES ######'''
 merged_df = pd.merge(requests_df, diet_df, on='AuthorId', how='left')
