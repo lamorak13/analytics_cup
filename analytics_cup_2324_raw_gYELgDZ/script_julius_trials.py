@@ -323,5 +323,9 @@ predictions_df = pd.DataFrame({
 })
 
 # Write to CSV
+if predictions_df['id'].dtype == 'float':
+    predictions_df['id'] = predictions_df['id'].astype(int)
+
 predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
+
 print("Written to CSV.")
