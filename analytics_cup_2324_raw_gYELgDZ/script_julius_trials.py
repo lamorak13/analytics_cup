@@ -246,9 +246,12 @@ recipes_encoded = pd.get_dummies(recipes_df['RecipeIngredientPartsClassification
 recipes_df = recipes_df.join(recipes_encoded)
 dropColumn(recipes_df, 'RecipeIngredientPartsClassification')
 
+print(requests_df.duplicated(subset='RecipeId').any())
+
 '''##### MERGE DATAFRAMES ######'''
-merged_df = pd.merge(recipes_df, requests_df, on='RecipeId', how='inner')
-merged_df = pd.merge(merged_df, diet_df, on='AuthorId', how='inner') #TODO merge broken, recipeId the same for all !!!
+merged_df = pd.merge(requests_df, diet_df, on='AuthorId', how='left')
+merged_df = pd.merge(merged_df, recipes_df, on='RecipeId', how='left')
+print(len(merged_df))
 
 # reviews_df = reviews_df.dropna(subset=['Like'])
 
