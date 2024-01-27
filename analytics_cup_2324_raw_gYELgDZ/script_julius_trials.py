@@ -1,21 +1,18 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.metrics import mean_squared_error, accuracy_score, classification_report
+from sklearn.metrics import mean_squared_error, accuracy_score, classification_report, confusion_matrix, \
+    precision_score, recall_score, f1_score
+from sklearn.preprocessing import StandardScaler
+from imblearn.over_sampling import SMOTE
 
-# Load data
 diet_df = pd.read_csv('diet.csv')
 recipes_df = pd.read_csv('recipes.csv')
 reviews_df = pd.read_csv('reviews.csv', low_memory=False)
 requests_df = pd.read_csv('requests.csv')
 
-#merged_df = pd.merge(reviews_df, diet_df, on='AuthorId', how='left')
-#merged_df = pd.merge(merged_df, recipes_df, on='RecipeId', how='left')
-#merged_df = pd.merge(merged_df, requests_df, on=['AuthorId', 'RecipeId'], how='left')
-
 print("________________________________________________________________________________")
-
-''' Feature Engineering / Data preparation '''
+'''##### DATA PREPARATION #####'''
 
 
 def dropColumn(dataframe, column):
@@ -27,23 +24,31 @@ def dropColumn(dataframe, column):
 
 '''DIET'''
 # Fill NaN value in diet of the one entry that has no diet
-if diet_df['Diet'].isna().any():
-    diet_df['Diet'].fillna("Vegetarian", inplace=True)
+diet_df['Diet'] = diet_df['Diet'].fillna("Vegetarian")
 
+# Encode Diet
+diet_encoded = pd.get_dummies(diet_df['Diet'], prefix='Diet', dtype=int)
+diet_df = diet_df.join(diet_encoded)
+dropColumn(diet_df, 'Diet')
 
 '''RECIPES'''
 # Total Time = CookTime + PrepTime
 recipes_df['TotalTime'] = recipes_df['CookTime'] + recipes_df['PrepTime']
 dropColumn(recipes_df, 'CookTime')
 dropColumn(recipes_df, 'PrepTime')
+
+dropColumn(recipes_df, 'Name')
+
+# Encode RecipeCategory
+recipes_encoded = pd.get_dummies(recipes_df['RecipeCategory'], prefix='RecipeCategory', dtype=int)
+recipes_df = recipes_df.join(recipes_encoded)
+dropColumn(recipes_df, 'RecipeCategory')
+
+dropColumn(recipes_df, 'RecipeIngredientQuantities')  # TODO Drop for now, more intensive processing needed.
+dropColumn(recipes_df, 'RecipeIngredientParts')  # TODO Drop for now, more intensive processing needed.
+
+dropColumn(recipes_df, 'RecipeServings')  # TODO Drop for now, more intensive processing needed.
 dropColumn(recipes_df, 'RecipeYield')
-dropColumn(reviews_df, 'Rating')
-dropColumn(reviews_df, 'Like')
-
-# Fill NaN values in RecipeServings with the median of servings
-servings_median = recipes_df['RecipeServings'].median()
-recipes_df["RecipeServings"].fillna(servings_median, inplace=True)
-
 
 '''REQUESTS'''
 # Replace all negative time values with absolute value
@@ -56,83 +61,92 @@ requests_df['HighCalories'] = requests_df['HighCalories'].astype(int)
 requests_df['HighProtein'] = requests_df['HighProtein'].apply(
     lambda x: 1 if x == 'Yes' else (0 if x == 'Indifferent' else x))
 
-# Correct LowSugar column
-requests_df['LowSugar'] = requests_df['LowSugar'].apply(lambda x: 1 if x == 'Indifferent' else x)
+dropColumn(requests_df, 'LowSugar')  # TODO Drop for now, because data seems to be nonsense
+dropColumn(requests_df, 'Time')  # TODO Drop for now
 
-####################################
-# TODO recipeCategories hot encoden
-####################################
+'''REVIEWS'''
+dropColumn(reviews_df, 'Rating')
 
 print("\nEngineered DataFrames:")
 print("\nDiet:")
-print(diet_df.describe())
+print(diet_df.head())
 print(diet_df.columns)
 print("\nRecipes:")
-print(recipes_df.describe())
+print(recipes_df.head())
 print(recipes_df.columns)
 print("\nReviews:")
-print(reviews_df.describe())
+print(reviews_df.head())
 print(reviews_df.columns)
 print("\nRequests:")
-print(requests_df.describe())
+print(requests_df.head())
 print(requests_df.columns)
 print("")
 
-''' Splitting of the reviews.csv file into prediction, training and testing sets '''
+'''##### FEATURE ENGINEERING #####'''
+recipes_df['FatCalorieProduct'] = recipes_df['FatContent'] * recipes_df['Calories']
 
-dropColumn(reviews_df, 'Rating')
-dropColumn(reviews_df, 'Like')
+# Standardize Content Values
+columns_to_standardize = ['Calories', 'FatContent', 'SaturatedFatContent', 'CholesterolContent', 'SodiumContent', 'CarbohydrateContent', 'FiberContent', 'SugarContent', 'ProteinContent']
+scaler = StandardScaler()
+standardized_data = scaler.fit_transform(recipes_df[columns_to_standardize])
+standardized_columns = [f'{col}_Standardized' for col in columns_to_standardize]
+standardized_df = pd.DataFrame(standardized_data, columns=standardized_columns)
+recipes_df = pd.concat([recipes_df, standardized_df], axis=1)
+dropColumn(recipes_df, 'Calories')
+dropColumn(recipes_df, 'FatContent')
+dropColumn(recipes_df, 'SaturatedFatContent')
+dropColumn(recipes_df, 'CholesterolContent')
+dropColumn(recipes_df, 'SodiumContent')
+dropColumn(recipes_df, 'CarbohydrateContent')
+dropColumn(recipes_df, 'FiberContent')
+dropColumn(recipes_df, 'SugarContent')
+dropColumn(recipes_df, 'ProteinContent')
 
-split_index_training = 42814
-split_index_testing = 42814 + int((140195 - 42814) / 2)
 
-if not (0 <= split_index_training < split_index_testing <= len(reviews_df)):
-    raise ValueError("Out of bounds or wrong order.")
+'''##### MERGE DATAFRAMES ######'''
+merged_df = pd.merge(recipes_df, requests_df, on='RecipeId', how='inner')
+merged_df = pd.merge(merged_df, diet_df, on='AuthorId', how='inner')
 
-prediction_df = reviews_df.iloc[:split_index_training]
-training_df = reviews_df.iloc[split_index_training:split_index_testing]
-testing_df = reviews_df.iloc[split_index_testing:]
+# reviews_df = reviews_df.dropna(subset=['Like'])
 
-print("\nPrediction DataFrame:")
-print("")
-print(prediction_df.head())
-print(prediction_df.describe())
-print(prediction_df.columns)
-
-print("\nTraining DataFrame:")
-print("")
-print(training_df.head())
-print(training_df.describe())
-print(training_df.columns)
-
-print("\nTesting DataFrame:")
-print("")
-print(testing_df.head())
-print(testing_df.describe())
-print(testing_df.columns)
-print("")
-print("")
+dropColumn(merged_df, 'AuthorId')
+dropColumn(merged_df, 'RecipeId')
 
 print("________________________________________________________________________________")
 
-''' Regression '''
+'''##### RUN REGRESSION ######'''
 
-####################################
-# TODO anpassen, noch kopletter murks, müssen richtige training daten auswählen
-####################################
+feature_columns = merged_df.columns.tolist()
 
-#X_train = training_df.drop('Target', axis=1)
-#y_train = training_df['Target']
+print("Feature Columns: ", feature_columns)
 
-# Create a logistic regression model instance
-#model = LogisticRegression(max_iter=1000)
+mask = reviews_df['Like'].notna()  # Remove NA values in Like column from regression
 
-# Fit the model to the training data
-#model.fit(X_train, y_train)
+X = merged_df[feature_columns][mask]
+y = reviews_df['Like'][mask].astype(int)
 
-# Time to make predictions yikes
-#X_prediction = prediction_df.drop('Target', axis=1)
-#prediction_df['Predicted'] = model.predict(X_prediction)
+print(y.value_counts()[1], "1s")
+print(y.value_counts()[0], "0s")
 
-# You can now inspect the prediction_df with the predictions
-#print(prediction_df)
+smote = SMOTE()
+X_resampled, y_resampled = smote.fit_resample(X, y)
+
+print(y_resampled.value_counts()[1], "1s")
+print(y_resampled.value_counts()[0], "0s")
+
+# Splitting the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+# Feature Scaling
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Creating and fitting the logistic regression model
+model = LogisticRegression()
+model.fit(X_train_scaled, y_train)
+
+# Predicting and evaluating the model
+y_pred = model.predict(X_test_scaled)
+print(confusion_matrix(y_test, y_pred))
+print(classification_report(y_test, y_pred))
