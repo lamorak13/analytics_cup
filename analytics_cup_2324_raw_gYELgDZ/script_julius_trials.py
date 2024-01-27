@@ -316,10 +316,9 @@ X_predict_scaled = scaler.transform(X_predict)
 predictions = model.predict(X_predict_scaled)
 
 # Create a New DataFrame for Predictions
-predictions_df = pd.DataFrame({
-    'id': predict_df['TestSetId'],
-    'prediction': predictions
-})
+ids = np.arange(1, 42815)
+predictions_nan = np.full_like(ids, np.nan)
+predictions_df = pd.DataFrame({'id': ids, 'prediction': predictions})
 
 # Write to CSV
 predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
