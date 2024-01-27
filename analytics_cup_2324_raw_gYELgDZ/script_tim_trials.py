@@ -167,4 +167,4 @@ df_predictions = pd.DataFrame({'id': ids, 'prediction': predictions})
 print(len(y_pred))
 
 # Write the DataFrame to a CSV file
-df_predictions.to_csv('predictions_die_bummler_test.csv', index=False)
+df_predictions.to_csv('predictions_die_bummler_1.csv', index=False)
