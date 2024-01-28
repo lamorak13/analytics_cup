@@ -1,10 +1,14 @@
 import pandas as pd
-import re
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_squared_error, accuracy_score, classification_report, confusion_matrix, \
     precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.tree import plot_tree
+import matplotlib.pyplot as plt
+
 
 diet_df = pd.read_csv('diet.csv')
 recipes_df = pd.read_csv('recipes.csv')
@@ -251,86 +255,69 @@ dropColumn(recipes_df, 'RecipeIngredientPartsClassification')
 '''##### MERGE DATAFRAMES ######'''
 merged_df = pd.merge(requests_df, diet_df, on='AuthorId', how='left')
 merged_df = pd.merge(merged_df, recipes_df, on='RecipeId', how='left')
-print(len(merged_df))
 
 # reviews_df = reviews_df.dropna(subset=['Like'])
 
 dropColumn(merged_df, 'AuthorId')
 dropColumn(merged_df, 'RecipeId')
+dropColumn(merged_df, 'Age')
+
 
 print("________________________________________________________________________________")
 
-'''##### RUN REGRESSION ######'''
+
+
+
+print("________________________________________________________________________________")
+
+'''##### RUN DECISION TREE APPROACH ######'''
 
 feature_columns = merged_df.columns.tolist()
-
-print("Feature Columns: ", feature_columns)
-
 mask = reviews_df['Like'].notna()  # Remove NA values in Like column from regression
 
 X = merged_df[feature_columns][mask]
 y = reviews_df['Like'][mask].astype(int)
 
-print(y.value_counts()[1], "1s")
-print(y.value_counts()[0], "0s")
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=2024)
 
-# Splitting the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=2024)
+# Instantiate the Decision Tree Classifier
+dt_classifier = DecisionTreeClassifier(random_state=2024, class_weight='balanced')
+#dt_classifier = DecisionTreeClassifier(max_depth=20, min_samples_split=4, min_samples_leaf=2, random_state=2024)
+dt_classifier.fit(X_train, y_train)
 
-# Feature Scaling
-scaler = StandardScaler()
-scaler2 = MinMaxScaler()
-X_train_scaled = scaler2.fit_transform(X_train)
-X_test_scaled = scaler2.transform(X_test)
+# Train the classifier
+dt_classifier.fit(X_train, y_train)
 
-# Creating and fitting the logistic regression model
-model = LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced')
-model.fit(X_train_scaled, y_train)
+# Get probabilities for the positive class
+probabilities = dt_classifier.predict_proba(X_test)[:, 1]
 
-# Predicting and evaluating the model
-y_pred = model.predict(X_test_scaled)
-cm = confusion_matrix(y_test, y_pred)
-print(cm)
-print(classification_report(y_test, y_pred))
+# Define your custom threshold
+threshold = 0.4  # Adjust this value as needed
 
-# Extracting True Negatives, False Positives, False Negatives, and True Positives
-tn, fp, fn, tp = cm.ravel()
-
-# Calculating Sensitivity and Specificity
-sensitivity = tp / (tp + fn)
-specificity = tn / (tn + fp)
-balanced_accuracy = (sensitivity + specificity) / 2
-
-print(f"Sensitivity: {sensitivity}")
-print(f"Specificity: {specificity}")
-print(f"Balanced Accuracy: {balanced_accuracy}")
-
-# Perform cross-validation
-cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5)
-print("Mean CV Score:", cv_scores.mean())
-
-
-# Filter the rows where 'Like' is NA
-predict_df = reviews_df[reviews_df['Like'].isna()]
-
-# Select the same feature columns used in the model
-X_predict = merged_df.loc[predict_df.TestSetId, feature_columns]
-
-# Predict Using the Model
-X_predict_scaled = scaler2.transform(X_predict)
+# Apply threshold to convert probabilities to binary predictions
+y_pred_custom_threshold = (probabilities >= threshold).astype(int)
 
 # Make predictions
-predictions = model.predict(X_predict_scaled)
+y_pred = dt_classifier.predict(X_test)
 
-# Create a New DataFrame for Predictions
-predictions_df = pd.DataFrame({
-    'id': predict_df['TestSetId'],
-    'prediction': predictions
-})
+cm = confusion_matrix(y_test, y_pred_custom_threshold)
 
-if predictions_df['id'].dtype == 'float':
-    predictions_df['id'] = predictions_df['id'].astype(int)
+# Evaluate the model
+print("Accuracy:", accuracy_score(y_test, y_pred_custom_threshold))
+print("Confusion Matrix:\n", cm)
+print("Classification Report:\n", classification_report(y_test, y_pred_custom_threshold))
 
-# Write to CSV
-predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
-print("Written to CSV.")
+# Extracting TN, FP, FN, TP
+tn, fp, fn, tp = cm.ravel()
+
+# Calculate Sensitivity (Recall or True Positive Rate)
+sensitivity = tp / (tp + fn)
+
+# Calculate Specificity (True Negative Rate)
+specificity = tn / (tn + fp)
+
+balanced_accuracy = (sensitivity + specificity) / 2
+
+print(f"Sensitivity (Recall): {sensitivity}")
+print(f"Specificity: {specificity}")
+print(f"Balanced Accuracy: {balanced_accuracy}")

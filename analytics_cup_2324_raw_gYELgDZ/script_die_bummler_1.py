@@ -3,7 +3,12 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_squared_error, accuracy_score, classification_report, confusion_matrix, \
     precision_score, recall_score, f1_score
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.tree import plot_tree
+import matplotlib.pyplot as plt
+
 
 diet_df = pd.read_csv('diet.csv')
 recipes_df = pd.read_csv('recipes.csv')
@@ -250,12 +255,13 @@ dropColumn(recipes_df, 'RecipeIngredientPartsClassification')
 '''##### MERGE DATAFRAMES ######'''
 merged_df = pd.merge(requests_df, diet_df, on='AuthorId', how='left')
 merged_df = pd.merge(merged_df, recipes_df, on='RecipeId', how='left')
-print(len(merged_df))
 
 # reviews_df = reviews_df.dropna(subset=['Like'])
 
 dropColumn(merged_df, 'AuthorId')
 dropColumn(merged_df, 'RecipeId')
+dropColumn(merged_df, 'Age')
+
 
 print("________________________________________________________________________________")
 
@@ -278,8 +284,9 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random
 
 # Feature Scaling
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+scaler2 = MinMaxScaler()
+X_train_scaled = scaler2.fit_transform(X_train)
+X_test_scaled = scaler2.transform(X_test)
 
 # Creating and fitting the logistic regression model
 model = LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced')
@@ -287,12 +294,12 @@ model.fit(X_train_scaled, y_train)
 
 # Predicting and evaluating the model
 y_pred = model.predict(X_test_scaled)
-confusion_matrix = confusion_matrix(y_test, y_pred)
-print(confusion_matrix)
+cm = confusion_matrix(y_test, y_pred)
+print(cm)
 print(classification_report(y_test, y_pred))
 
 # Extracting True Negatives, False Positives, False Negatives, and True Positives
-tn, fp, fn, tp = confusion_matrix.ravel()
+tn, fp, fn, tp = cm.ravel()
 
 # Calculating Sensitivity and Specificity
 sensitivity = tp / (tp + fn)
@@ -315,7 +322,7 @@ predict_df = reviews_df[reviews_df['Like'].isna()]
 X_predict = merged_df.loc[predict_df.TestSetId, feature_columns]
 
 # Predict Using the Model
-X_predict_scaled = scaler.transform(X_predict)
+X_predict_scaled = scaler2.transform(X_predict)
 
 # Make predictions
 predictions = model.predict(X_predict_scaled)
@@ -332,3 +339,4 @@ if predictions_df['id'].dtype == 'float':
 # Write to CSV
 predictions_df.to_csv('predictions_die_bummler_1.csv', index=False)
 print("Written to CSV.")
+
