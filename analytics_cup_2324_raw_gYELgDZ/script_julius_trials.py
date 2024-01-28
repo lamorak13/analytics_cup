@@ -1,10 +1,13 @@
 import pandas as pd
-import re
+from imblearn.over_sampling import SMOTE
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_squared_error, accuracy_score, classification_report, confusion_matrix, \
     precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
+from xgboost import XGBClassifier
+import lightgbm as lgb
 
 diet_df = pd.read_csv('diet.csv')
 recipes_df = pd.read_csv('recipes.csv')
@@ -275,25 +278,83 @@ print(y.value_counts()[1], "1s")
 print(y.value_counts()[0], "0s")
 
 # Splitting the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=2024)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=2024)
 
 # Feature Scaling
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Creating and fitting the logistic regression model
-model = LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced')
+# Create an instance of the SMOTE class
+smote = SMOTE(sampling_strategy='auto', random_state=2024)
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
+X_train_scaled = X_train_resampled
+y_train = y_train_resampled
+
+# Creating and fitting the model
+
+# XGBoost
+model_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+#model.fit(X_train_scaled, y_train)
+#y_probs = model.predict_proba(X_test_scaled)[:, 1]
+#threshold = 0.18
+#y_pred = (y_probs >= threshold).astype(int)
+
+# RandomForest
+model_rf = RandomForestClassifier(n_estimators=100, random_state=2024)
+#model.fit(X_train_scaled, y_train)
+#y_probs = model.predict_proba(X_test_scaled)[:, 1]
+#threshold = 0.3
+#y_pred = (y_probs >= threshold).astype(int)
+
+# Logistic
+model_logistic = LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced')
+#model.fit(X_train_scaled, y_train)
+#y_pred = model.predict(X_test_scaled)
+
+# LightGBM
+model_lgb = lgb.LGBMClassifier(objective='binary', metric='binary_logloss')
+#model.fit(X_train_scaled, y_train)
+#y_probs = model.predict_proba(X_test_scaled)[:, 1]
+#threshold = 0.18
+#y_pred = (y_probs >= threshold).astype(int)
+
+# Create a Voting Classifier
+model = VotingClassifier(estimators=[
+    ('xgb', model_xgb),
+    ('rf', model_rf),
+    ('logistic', model_logistic),
+    ('lgb', model_lgb)
+], voting='soft')
+
+# Fit the ensemble model
 model.fit(X_train_scaled, y_train)
 
-# Predicting and evaluating the model
-y_pred = model.predict(X_test_scaled)
-print(confusion_matrix(y_test, y_pred))
+# Make predictions using the ensemble model
+y_probs = model.predict_proba(X_test_scaled)[:, 1]
+threshold = 0.29
+y_pred = (y_probs >= threshold).astype(int)
+
+
+confusion_matrix = confusion_matrix(y_test, y_pred)
+print(confusion_matrix)
 print(classification_report(y_test, y_pred))
 
+# Extracting True Negatives, False Positives, False Negatives, and True Positives
+tn, fp, fn, tp = confusion_matrix.ravel()
+
+# Calculating Sensitivity and Specificity
+sensitivity = tp / (tp + fn)
+specificity = tn / (tn + fp)
+balanced_accuracy = (sensitivity + specificity) / 2
+
+print(f"Sensitivity: {sensitivity}")
+print(f"Specificity: {specificity}")
+print(f"Balanced Accuracy: {balanced_accuracy}")
+
 # Perform cross-validation
-cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5)
-print("Mean CV Score:", cv_scores.mean())
+#cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5)
+#print("Mean CV Score:", cv_scores.mean())
 
 
 # Filter the rows where 'Like' is NA
@@ -306,7 +367,9 @@ X_predict = merged_df.loc[predict_df.TestSetId, feature_columns]
 X_predict_scaled = scaler.transform(X_predict)
 
 # Make predictions
-predictions = model.predict(X_predict_scaled)
+y_probs_2 = model.predict_proba(X_predict_scaled)[:, 1]
+y_pred_2 = (y_probs_2 >= threshold).astype(int)
+predictions = y_pred_2
 
 # Create a New DataFrame for Predictions
 predictions_df = pd.DataFrame({
