@@ -1,5 +1,4 @@
 import pandas as pd
-import re
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_squared_error, accuracy_score, classification_report, confusion_matrix, \
@@ -83,6 +82,8 @@ print("")
 
 '''##### FEATURE ENGINEERING #####'''
 recipes_df['FatCalorieProduct'] = recipes_df['FatContent'] * recipes_df['Calories']
+recipes_df['ProteinFiberProduct'] = recipes_df['ProteinContent'] * recipes_df['FiberContent']
+recipes_df['TotalTime^2'] = recipes_df['TotalTime'] * recipes_df['TotalTime']
 
 # Standardize Content Values
 columns_to_standardize = ['Calories', 'FatContent', 'SaturatedFatContent', 'CholesterolContent', 'SodiumContent',
@@ -245,7 +246,6 @@ recipes_encoded = pd.get_dummies(recipes_df['RecipeIngredientPartsClassification
 recipes_df = recipes_df.join(recipes_encoded)
 dropColumn(recipes_df, 'RecipeIngredientPartsClassification')
 
-print(requests_df.duplicated(subset='RecipeId').any())
 
 '''##### MERGE DATAFRAMES ######'''
 merged_df = pd.merge(requests_df, diet_df, on='AuthorId', how='left')
@@ -274,7 +274,7 @@ print(y.value_counts()[1], "1s")
 print(y.value_counts()[0], "0s")
 
 # Splitting the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=2024)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=2024)
 
 # Feature Scaling
 scaler = StandardScaler()
@@ -282,13 +282,26 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 # Creating and fitting the logistic regression model
-model = LogisticRegression(class_weight='balanced')
+model = LogisticRegression(C=1.0, penalty='l2', solver='lbfgs', class_weight='balanced')
 model.fit(X_train_scaled, y_train)
 
 # Predicting and evaluating the model
 y_pred = model.predict(X_test_scaled)
-print(confusion_matrix(y_test, y_pred))
+confusion_matrix = confusion_matrix(y_test, y_pred)
+print(confusion_matrix)
 print(classification_report(y_test, y_pred))
+
+# Extracting True Negatives, False Positives, False Negatives, and True Positives
+tn, fp, fn, tp = confusion_matrix.ravel()
+
+# Calculating Sensitivity and Specificity
+sensitivity = tp / (tp + fn)
+specificity = tn / (tn + fp)
+balanced_accuracy = (sensitivity + specificity) / 2
+
+print(f"Sensitivity: {sensitivity}")
+print(f"Specificity: {specificity}")
+print(f"Balanced Accuracy: {balanced_accuracy}")
 
 # Perform cross-validation
 cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5)
